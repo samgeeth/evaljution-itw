@@ -1,0 +1,158 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// A BTree node
+typedef struct BTreeNode {
+    char keys[5];           // Array of keys (maximum 2t - 1, where t = 3)
+    struct BTreeNode *children[6];  // Array of child pointers (maximum 2t)
+    int numKeys;           // Number of keys currently in the node
+    int isLeaf;            // True if the node is a leaf, false if it has children
+} BTreeNode;
+
+// BTree structure
+typedef struct BTree {
+    BTreeNode *root;
+    int t;  // Minimum degree (defines the range for number of keys)
+} BTree;
+
+// Function prototypes
+BTreeNode* createNode(int t, int isLeaf);
+void insertNonFull(BTreeNode *node, char key, int t);
+void splitChild(BTreeNode *parent, int i, BTreeNode *child, int t);
+void insert(BTree *tree, char key);
+void printTree(BTreeNode *node, int level);
+
+// Create a new B-tree with a given minimum degree
+BTree* createBTree(int t) {
+    BTree tree = (BTree)malloc(sizeof(BTree));
+    tree->t = t;
+    tree->root = createNode(t, 1);  // Initially, the root is a leaf
+    return tree;
+}
+
+// Create a new node with t as minimum degree
+BTreeNode* createNode(int t, int isLeaf) {
+    BTreeNode newNode = (BTreeNode)malloc(sizeof(BTreeNode));
+    newNode->numKeys = 0;
+    newNode->isLeaf = isLeaf;
+    for (int i = 0; i < 6; i++) {
+        newNode->children[i] = NULL;
+    }
+    return newNode;
+}
+
+// Insert a key into the B-tree
+void insert(BTree *tree, char key) {
+    BTreeNode *root = tree->root;
+
+    // If root is full, create a new node and split the old root
+    if (root->numKeys == 5) {
+        BTreeNode *newNode = createNode(tree->t, 0);
+        newNode->children[0] = root;
+        tree->root = newNode;
+        splitChild(newNode, 0, root, tree->t);
+        insertNonFull(newNode, key, tree->t);
+    } else {
+        insertNonFull(root, key, tree->t);
+    }
+}
+
+// Insert key into a node that is not full
+void insertNonFull(BTreeNode *node, char key, int t) {
+    int i = node->numKeys - 1;
+
+    // If the node is a leaf, insert the key in the appropriate position
+    if (node->isLeaf) {
+        while (i >= 0 && key < node->keys[i]) {
+            node->keys[i + 1] = node->keys[i];
+            i--;
+        }
+        node->keys[i + 1] = key;
+        node->numKeys++;
+    } else {  // If the node is not a leaf, find the child to insert into
+        while (i >= 0 && key < node->keys[i]) {
+            i--;
+        }
+        i++;
+
+        // If the child is full, split it
+        if (node->children[i]->numKeys == 5) {
+            splitChild(node, i, node->children[i], t);
+
+            // After split, the middle key moves up. Determine which of the two children to follow
+            if (key > node->keys[i]) {
+                i++;
+            }
+        }
+        insertNonFull(node->children[i], key, t);
+    }
+}
+
+// Split the child of a node
+void splitChild(BTreeNode *parent, int i, BTreeNode *child, int t) {
+    BTreeNode *newNode = createNode(t, child->isLeaf);
+    parent->children[i + 1] = newNode;
+    newNode->numKeys = t - 1;
+
+    // Move the last t-1 keys of the child to the new node
+    for (int j = 0; j < t - 1; j++) {
+        newNode->keys[j] = child->keys[j + t];
+    }
+
+    // If the child is not a leaf, move the last t children
+    if (!child->isLeaf) {
+        for (int j = 0; j < t; j++) {
+            newNode->children[j] = child->children[j + t];
+        }
+    }
+
+    child->numKeys = t - 1;
+
+    // Move the middle key of the child to the parent node
+    for (int j = parent->numKeys; j > i; j--) {
+        parent->children[j + 1] = parent->children[j];
+    }
+    parent->children[i + 1] = newNode;
+    for (int j = parent->numKeys - 1; j >= i; j--) {
+        parent->keys[j + 1] = parent->keys[j];
+    }
+    parent->keys[i] = child->keys[t - 1];
+    parent->numKeys++;
+}
+
+// Print the tree (for visualization)
+void printTree(BTreeNode *node, int level) {
+    if (node == NULL) return;
+    
+    printf("Level %d: ", level);
+    for (int i = 0; i < node->numKeys; i++) {
+        printf("%c ", node->keys[i]);
+    }
+    printf("\n");
+
+    if (!node->isLeaf) {
+        for (int i = 0; i <= node->numKeys; i++) {
+            printTree(node->children[i], level + 1);
+        }
+    }
+}
+
+int main() {
+    // Create a B-tree with minimum degree t = 3
+    BTree *tree = createBTree(3);
+
+    // List of keys to insert
+    char keys[] = {'F', 'S', 'Q', 'K', 'C', 'L', 'H', 'T', 'V', 'W', 'M', 'R', 'N', 'P', 'A', 'B', 'X', 'Y', 'D', 'Z', 'E'};
+    int numKeys = sizeof(keys) / sizeof(keys[0]);
+
+    // Insert each key into the B-tree
+    for (int i = 0; i < numKeys; i++) {
+        insert(tree, keys[i]);
+    }
+
+    // Print the resulting B-tree structure
+    printTree(tree->root, 0);
+
+    return 0;
+}
